@@ -23,8 +23,8 @@ fi
 
 # Remove whichmodel hooks from settings
 UPDATED_SETTINGS=$(jq '
-    if .hooks.PreToolUse then
-        .hooks.PreToolUse = [.hooks.PreToolUse[] | select(
+    if .hooks.SessionStart then
+        .hooks.SessionStart = [.hooks.SessionStart[] | select(
             .hooks[0].command // "" | contains("whichmodel") | not
         )]
     else

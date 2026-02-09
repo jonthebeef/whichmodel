@@ -31,19 +31,18 @@ fi
 cp "$SETTINGS_FILE" "$SETTINGS_FILE.backup"
 echo "📦 Backed up settings to $SETTINGS_FILE.backup"
 
-# Add the hook to settings using the correct Claude Code hook structure
+# Add the hook to SessionStart
 UPDATED_SETTINGS=$(jq --arg hook "$HOOK_PATH" '
     # Ensure hooks object exists
     .hooks //= {} |
-    # Ensure PreToolUse array exists
-    .hooks.PreToolUse //= [] |
+    # Ensure SessionStart array exists
+    .hooks.SessionStart //= [] |
     # Remove any existing whichmodel hooks to avoid duplicates
-    .hooks.PreToolUse = [.hooks.PreToolUse[] | select(
+    .hooks.SessionStart = [.hooks.SessionStart[] | select(
         .hooks[0].command // "" | contains("whichmodel") | not
     )] |
-    # Add our hook for EnterPlanMode and Task tools
-    .hooks.PreToolUse += [{
-        "matcher": "EnterPlanMode|Task",
+    # Add our hook
+    .hooks.SessionStart += [{
         "hooks": [{
             "type": "command",
             "command": $hook
@@ -56,7 +55,8 @@ echo "$UPDATED_SETTINGS" > "$SETTINGS_FILE"
 echo "✅ whichmodel installed successfully!"
 echo ""
 echo "How it works:"
-echo "  - When you enter plan mode or spawn a task agent,"
-echo "    Claude will now recommend which model to use."
+echo "  - At the start of each session, Claude receives instructions"
+echo "    to recommend the right model when planning tasks."
 echo ""
+echo "To test: Start a new session and use /plan with any task."
 echo "To uninstall: ./uninstall.sh"
