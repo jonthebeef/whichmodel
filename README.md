@@ -30,7 +30,7 @@ Claude will analyze the task and tell you which model it recommends:
 ## Installation
 
 ```bash
-git clone https://github.com/yourusername/whichmodel.git
+git clone https://github.com/jonthebeef/whichmodel.git
 cd whichmodel
 ./install.sh
 ```
