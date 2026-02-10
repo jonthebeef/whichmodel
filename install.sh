@@ -1,22 +1,30 @@
 #!/bin/bash
+#
 # whichmodel installer
-# Adds the model recommendation hook to Claude Code settings
+# Adds the model recommendation hook to Claude Code
+#
 
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-HOOK_PATH="$SCRIPT_DIR/hooks/session-start.sh"
+SOURCE_HOOK="$SCRIPT_DIR/hooks/session-start.sh"
+TARGET_DIR="$HOME/.claude/hooks"
+TARGET_HOOK="$TARGET_DIR/whichmodel.sh"
 SETTINGS_FILE="$HOME/.claude/settings.json"
 
 echo "🔧 Installing whichmodel..."
 
-# Make hook executable
-chmod +x "$HOOK_PATH"
+# Create hooks directory if needed
+mkdir -p "$TARGET_DIR"
+
+# Copy hook to .claude/hooks
+cp "$SOURCE_HOOK" "$TARGET_HOOK"
+chmod +x "$TARGET_HOOK"
+echo "📁 Copied hook to ~/.claude/hooks/whichmodel.sh"
 
 # Check if settings file exists
 if [ ! -f "$SETTINGS_FILE" ]; then
     echo "Creating Claude Code settings file..."
-    mkdir -p "$HOME/.claude"
     echo '{}' > "$SETTINGS_FILE"
 fi
 
@@ -29,10 +37,10 @@ fi
 
 # Backup existing settings
 cp "$SETTINGS_FILE" "$SETTINGS_FILE.backup"
-echo "📦 Backed up settings to $SETTINGS_FILE.backup"
+echo "📦 Backed up settings to ~/.claude/settings.json.backup"
 
 # Add the hook to SessionStart
-UPDATED_SETTINGS=$(jq --arg hook "$HOOK_PATH" '
+UPDATED_SETTINGS=$(jq '
     # Ensure hooks object exists
     .hooks //= {} |
     # Ensure SessionStart array exists
@@ -45,7 +53,7 @@ UPDATED_SETTINGS=$(jq --arg hook "$HOOK_PATH" '
     .hooks.SessionStart += [{
         "hooks": [{
             "type": "command",
-            "command": $hook
+            "command": "~/.claude/hooks/whichmodel.sh"
         }]
     }]
 ' "$SETTINGS_FILE")

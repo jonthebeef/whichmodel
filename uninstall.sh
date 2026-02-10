@@ -1,12 +1,21 @@
 #!/bin/bash
+#
 # whichmodel uninstaller
-# Removes the model recommendation hook from Claude Code settings
+# Removes the model recommendation hook from Claude Code
+#
 
 set -e
 
+TARGET_HOOK="$HOME/.claude/hooks/whichmodel.sh"
 SETTINGS_FILE="$HOME/.claude/settings.json"
 
 echo "🔧 Uninstalling whichmodel..."
+
+# Remove hook file
+if [ -f "$TARGET_HOOK" ]; then
+    rm "$TARGET_HOOK"
+    echo "📁 Removed ~/.claude/hooks/whichmodel.sh"
+fi
 
 # Check if settings file exists
 if [ ! -f "$SETTINGS_FILE" ]; then
