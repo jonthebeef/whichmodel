@@ -33,7 +33,9 @@ cat >> "$CLAUDE_MD" << 'EOF'
 <!-- whichmodel -->
 ## Model Recommendation Protocol
 
-When creating ANY plan (via /plan, plan mode, or analyzing tasks from Linear/Jira/GitHub), include this block at the TOP of your plan:
+Before starting ANY significant task (feature implementation, bug fix, refactoring, or when receiving tasks from Linear/Jira/GitHub), assess the complexity and recommend the appropriate model.
+
+**Include this block before you begin work:**
 
 ```
 📊 Model Recommendation: [Haiku|Sonnet|Opus]
@@ -43,9 +45,15 @@ When creating ANY plan (via /plan, plan mode, or analyzing tasks from Linear/Jir
 ```
 
 **Model selection guide:**
-- **Haiku**: Simple/mechanical tasks - typos, small fixes, docs, single-file changes
-- **Sonnet**: Standard features, refactoring, tests, multi-file changes with clear patterns
-- **Opus**: Architecture decisions, ambiguous requirements, complex debugging, security-sensitive work
+- **Haiku**: Simple/mechanical tasks - typos, small fixes, docs, single-file changes, obvious bugs
+- **Sonnet**: Standard features, refactoring, tests, multi-file changes with clear patterns, moderate debugging
+- **Opus**: Architecture decisions, ambiguous requirements, complex debugging, security-sensitive work, novel problems
+
+**When to show this:**
+- When entering plan mode
+- When the user describes a task they want done
+- When importing/analyzing tickets from external tools
+- At the start of any multi-step implementation
 
 This helps users optimize their Claude Max subscription by using the right model for each task.
 <!-- /whichmodel -->
@@ -56,7 +64,7 @@ echo ""
 echo "Added to: ~/.claude/CLAUDE.md"
 echo ""
 echo "How it works:"
-echo "  - When you create a plan, Claude will recommend which model to use"
+echo "  - Before starting significant tasks, Claude recommends the right model"
 echo "  - Switch models with /model <name> if recommended"
 echo ""
 echo "To uninstall: ./uninstall.sh"
