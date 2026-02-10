@@ -1,70 +1,62 @@
 #!/bin/bash
 #
 # whichmodel installer
-# Adds the model recommendation hook to Claude Code
+# Adds model recommendation instructions to global CLAUDE.md
 #
 
 set -e
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SOURCE_HOOK="$SCRIPT_DIR/hooks/session-start.sh"
-TARGET_DIR="$HOME/.claude/hooks"
-TARGET_HOOK="$TARGET_DIR/whichmodel.sh"
-SETTINGS_FILE="$HOME/.claude/settings.json"
+CLAUDE_MD="$HOME/.claude/CLAUDE.md"
+MARKER="<!-- whichmodel -->"
 
 echo "🔧 Installing whichmodel..."
 
-# Create hooks directory if needed
-mkdir -p "$TARGET_DIR"
+# Create .claude directory if needed
+mkdir -p "$HOME/.claude"
 
-# Copy hook to .claude/hooks
-cp "$SOURCE_HOOK" "$TARGET_HOOK"
-chmod +x "$TARGET_HOOK"
-echo "📁 Copied hook to ~/.claude/hooks/whichmodel.sh"
-
-# Check if settings file exists
-if [ ! -f "$SETTINGS_FILE" ]; then
-    echo "Creating Claude Code settings file..."
-    echo '{}' > "$SETTINGS_FILE"
+# Check if already installed
+if [ -f "$CLAUDE_MD" ] && grep -q "$MARKER" "$CLAUDE_MD"; then
+    echo "⚠️  whichmodel is already installed in ~/.claude/CLAUDE.md"
+    echo "   Run ./uninstall.sh first if you want to reinstall."
+    exit 0
 fi
 
-# Check if jq is available
-if ! command -v jq &> /dev/null; then
-    echo "❌ Error: jq is required but not installed."
-    echo "   Install with: brew install jq"
-    exit 1
+# Backup existing CLAUDE.md if it exists
+if [ -f "$CLAUDE_MD" ]; then
+    cp "$CLAUDE_MD" "$CLAUDE_MD.backup"
+    echo "📦 Backed up existing CLAUDE.md"
 fi
 
-# Backup existing settings
-cp "$SETTINGS_FILE" "$SETTINGS_FILE.backup"
-echo "📦 Backed up settings to ~/.claude/settings.json.backup"
+# Append whichmodel instructions
+cat >> "$CLAUDE_MD" << 'EOF'
 
-# Add the hook to SessionStart
-UPDATED_SETTINGS=$(jq '
-    # Ensure hooks object exists
-    .hooks //= {} |
-    # Ensure SessionStart array exists
-    .hooks.SessionStart //= [] |
-    # Remove any existing whichmodel hooks to avoid duplicates
-    .hooks.SessionStart = [.hooks.SessionStart[] | select(
-        .hooks[0].command // "" | contains("whichmodel") | not
-    )] |
-    # Add our hook
-    .hooks.SessionStart += [{
-        "hooks": [{
-            "type": "command",
-            "command": "~/.claude/hooks/whichmodel.sh"
-        }]
-    }]
-' "$SETTINGS_FILE")
+<!-- whichmodel -->
+## Model Recommendation Protocol
 
-echo "$UPDATED_SETTINGS" > "$SETTINGS_FILE"
+When creating ANY plan (via /plan, plan mode, or analyzing tasks from Linear/Jira/GitHub), include this block at the TOP of your plan:
+
+```
+📊 Model Recommendation: [Haiku|Sonnet|Opus]
+   Reasoning: [one sentence why]
+   Current model: [your current model]
+   Action: [No change needed OR switch via /model <name>]
+```
+
+**Model selection guide:**
+- **Haiku**: Simple/mechanical tasks - typos, small fixes, docs, single-file changes
+- **Sonnet**: Standard features, refactoring, tests, multi-file changes with clear patterns
+- **Opus**: Architecture decisions, ambiguous requirements, complex debugging, security-sensitive work
+
+This helps users optimize their Claude Max subscription by using the right model for each task.
+<!-- /whichmodel -->
+EOF
 
 echo "✅ whichmodel installed successfully!"
 echo ""
-echo "How it works:"
-echo "  - At the start of each session, Claude receives instructions"
-echo "    to recommend the right model when planning tasks."
+echo "Added to: ~/.claude/CLAUDE.md"
 echo ""
-echo "To test: Start a new session and use /plan with any task."
+echo "How it works:"
+echo "  - When you create a plan, Claude will recommend which model to use"
+echo "  - Switch models with /model <name> if recommended"
+echo ""
 echo "To uninstall: ./uninstall.sh"

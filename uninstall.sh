@@ -1,46 +1,32 @@
 #!/bin/bash
 #
 # whichmodel uninstaller
-# Removes the model recommendation hook from Claude Code
+# Removes model recommendation instructions from global CLAUDE.md
 #
 
 set -e
 
-TARGET_HOOK="$HOME/.claude/hooks/whichmodel.sh"
-SETTINGS_FILE="$HOME/.claude/settings.json"
+CLAUDE_MD="$HOME/.claude/CLAUDE.md"
 
 echo "🔧 Uninstalling whichmodel..."
 
-# Remove hook file
-if [ -f "$TARGET_HOOK" ]; then
-    rm "$TARGET_HOOK"
-    echo "📁 Removed ~/.claude/hooks/whichmodel.sh"
-fi
-
-# Check if settings file exists
-if [ ! -f "$SETTINGS_FILE" ]; then
-    echo "No Claude Code settings file found. Nothing to uninstall."
+# Check if CLAUDE.md exists
+if [ ! -f "$CLAUDE_MD" ]; then
+    echo "No ~/.claude/CLAUDE.md found. Nothing to uninstall."
     exit 0
 fi
 
-# Check if jq is available
-if ! command -v jq &> /dev/null; then
-    echo "❌ Error: jq is required but not installed."
-    echo "   Install with: brew install jq"
-    exit 1
+# Check if whichmodel is installed
+if ! grep -q "<!-- whichmodel -->" "$CLAUDE_MD"; then
+    echo "whichmodel not found in ~/.claude/CLAUDE.md. Nothing to uninstall."
+    exit 0
 fi
 
-# Remove whichmodel hooks from settings
-UPDATED_SETTINGS=$(jq '
-    if .hooks.SessionStart then
-        .hooks.SessionStart = [.hooks.SessionStart[] | select(
-            .hooks[0].command // "" | contains("whichmodel") | not
-        )]
-    else
-        .
-    end
-' "$SETTINGS_FILE")
+# Remove whichmodel section (between markers)
+sed -i '' '/<!-- whichmodel -->/,/<!-- \/whichmodel -->/d' "$CLAUDE_MD"
 
-echo "$UPDATED_SETTINGS" > "$SETTINGS_FILE"
+# Clean up any leftover empty lines at end of file
+sed -i '' -e :a -e '/^\n*$/{$d;N;ba' -e '}' "$CLAUDE_MD" 2>/dev/null || true
 
 echo "✅ whichmodel uninstalled successfully!"
+echo "   Removed from ~/.claude/CLAUDE.md"
