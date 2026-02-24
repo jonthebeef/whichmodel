@@ -2,7 +2,7 @@
 
 **Automatic model recommendations for Claude Code**
 
-Stop burning Opus tokens on simple tasks. `whichmodel` adds instructions to your global CLAUDE.md that make Claude recommend the right model (Haiku, Sonnet, or Opus) based on task complexity—before you start implementation.
+Stop burning Opus tokens on simple tasks. `whichmodel` installs a [Claude Code](https://docs.anthropic.com/en/docs/claude-code) hook that recommends the cheapest sufficient model (Haiku, Sonnet, or Opus) before every task — and pauses to let you switch.
 
 ## The Problem
 
@@ -12,7 +12,7 @@ For Claude Max subscribers, this means hitting rate limits faster than necessary
 
 ## The Solution
 
-`whichmodel` installs a SessionStart hook and reference guide into your Claude Code config. Before any significant task, Claude analyses complexity and recommends which model to use:
+`whichmodel` installs a SessionStart hook that injects model recommendation logic at the start of every session. Before any task, Claude determines the cheapest model that can handle it and tells you:
 
 ```
 ⚡ Model Recommendation: Switch to Sonnet
@@ -36,15 +36,15 @@ That's it. One dependency, one command.
 
 ## How It Works
 
-1. The installer adds a **SessionStart hook** to `~/.claude/settings.json`
-2. It also appends a **model selection guide** to `~/.claude/CLAUDE.md`
-3. Before any significant task, Claude recommends the right model
-4. If a switch is recommended, Claude **pauses and asks you** before proceeding
+1. A **SessionStart hook** (`~/.claude/hooks/whichmodel.sh`) injects model recommendation instructions via `hookSpecificOutput.additionalContext`
+2. A **CLAUDE.md directive** (`~/.claude/CLAUDE.md`) tells Claude to follow the hook's instructions — no skipping, no summarizing
+3. Before any task, Claude determines the **cheapest sufficient model** and compares it to the current one
+4. If a switch is recommended, Claude **pauses with AskUserQuestion** before proceeding
 5. You switch with `/model <name>` or continue as-is
 
 **No external API calls. No local LLMs. No extra cost.**
 
-The intelligence comes from Claude itself — the hook just tells it to include a recommendation.
+The intelligence comes from Claude itself — the hook injects the decision framework, and CLAUDE.md ensures it's followed.
 
 ## Model Guidelines
 
@@ -58,10 +58,7 @@ The intelligence comes from Claude itself — the hook just tells it to include 
 
 "But if I'm on Opus, aren't I already using expensive tokens for the recommendation?"
 
-Yes, but:
-- **Planning is cheap**: ~1-2k tokens to read a task and output a plan
-- **Implementation is expensive**: 50-100k+ tokens for coding, iterating, debugging
-- **You save on implementation**: If Opus says "this is a Haiku task" before you code, you switch and save the bulk of the spend
+Yes, but the recommendation costs ~1-2k tokens. Implementation costs 50-100k+. If Opus says "this is a Haiku task" before you start coding, you switch and save the bulk of the spend.
 
 ## Upgrading
 

@@ -55,7 +55,10 @@ set -euo pipefail
 
 cat <<'EOF'
 {
-  "additionalContext": "MANDATORY: Before starting ANY significant task (feature implementation, bug fix, refactoring, or when receiving tasks from external tools), assess complexity and recommend the appropriate model.\n\nIf no model change is needed, output this block at the TOP before other content:\n\n---\n### ⚡ Model: [Haiku|Sonnet|Opus] (no change needed)\n**Why:** [one sentence reasoning]\n\n---\n\nIf a model SWITCH is recommended, output this block instead:\n\n---\n### ⚡ Model Recommendation: Switch to [recommended]\n**Current:** [current model] → **Suggested:** [recommended model]\n**Why:** [one sentence reasoning]\n\n---\n\nModel guide:\nHAIKU = simple/mechanical (typos, small fixes, docs)\nSONNET = standard features, refactoring, tests\nOPUS = architecture, ambiguous requirements, complex debugging\n\nCRITICAL - IF YOUR RECOMMENDATION DIFFERS FROM THE CURRENT MODEL:\nYou MUST use AskUserQuestion IMMEDIATELY AFTER the banner to pause execution and let the user decide. Use exactly two options:\n- Option 1: label \"Continue with <current model>\", description \"Proceed without changing model\"\n- Option 2: label \"Switch to <recommended model>\", description \"Type /model <recommended> to switch, then re-send your task\"\nIf the user selects option 2, respond ONLY with: \"Type `/model <recommended model>` and then re-send your task.\" Do NOT proceed with the task.\nIf the user selects option 1 or provides any other response, proceed with the task immediately."
+  "hookSpecificOutput": {
+    "hookEventName": "SessionStart",
+    "additionalContext": "MANDATORY: Before starting ANY task, determine the CHEAPEST model that can handle it well, then compare to your current model.\n\nStep 1: Match the task to the cheapest sufficient model:\n- HAIKU: docs, READMEs, typos, small fixes, single-file edits, simple creative writing, obvious bugs\n- SONNET: standard features, refactoring, tests, multi-file changes, moderate debugging\n- OPUS: architecture decisions, ambiguous requirements, complex debugging, security-sensitive work, novel problems\n\nStep 2: Compare to your current model. DO NOT bias toward staying on the current model. If the task is simple, recommend the cheaper model even if you are already running.\n\nIf the cheapest sufficient model MATCHES your current model, output:\n\n---\n### ⚡ Model: [current model] (correct for this task)\n**Why:** [one sentence reasoning]\n\n---\n\nThen proceed with the task.\n\nIf the cheapest sufficient model DIFFERS from your current model, output:\n\n---\n### ⚡ Model Recommendation: Switch to [recommended]\n**Current:** [current model] → **Suggested:** [recommended model]\n**Why:** [one sentence reasoning]\n\n---\n\nThen you MUST use AskUserQuestion IMMEDIATELY to pause execution. Use exactly two options:\n- Option 1: label \"Continue with [current model]\", description \"Proceed without changing model\"\n- Option 2: label \"Switch to [recommended model]\", description \"Type /model [recommended] to switch, then re-send your task\"\nIf the user selects option 2, respond ONLY with: \"Type `/model [recommended model]` and then re-send your task.\" Do NOT proceed with the task.\nIf the user selects option 1 or provides any other response, proceed with the task immediately."
+  }
 }
 EOF
 HOOKEOF
@@ -68,38 +71,40 @@ cat >> "$CLAUDE_MD" << 'EOF'
 <!-- whichmodel -->
 ## Model Recommendation Protocol
 
-Model selection guide (used by whichmodel hook):
-- **Haiku**: Simple/mechanical tasks - typos, small fixes, docs, single-file changes, obvious bugs
-- **Sonnet**: Standard features, refactoring, tests, multi-file changes with clear patterns, moderate debugging
-- **Opus**: Architecture decisions, ambiguous requirements, complex debugging, security-sensitive work, novel problems
+A SessionStart hook (whichmodel) injects model recommendation instructions via additionalContext at the start of every session. You MUST follow those instructions before responding to any task. Do not skip, ignore, or summarize the hook's output — execute its instructions exactly as written, including any AskUserQuestion pauses.
 <!-- /whichmodel -->
 EOF
 echo "✓ Model guide added to CLAUDE.md"
 
 # Wire hook into settings.json
-HOOK_ENTRY='{"hooks": [{"type": "command", "command": "~/.claude/hooks/whichmodel.sh"}]}'
+HOOK_ENTRY='{"hooks": [{"type": "command", "command": "$HOME/.claude/hooks/whichmodel.sh"}]}'
 
 if [ -f "$SETTINGS" ]; then
     # Backup settings
     cp "$SETTINGS" "$SETTINGS.backup"
 
+    # Remove any existing whichmodel entries from nested hook groups
     if grep -q "whichmodel.sh" "$SETTINGS"; then
-        echo "✓ Hook already wired in settings.json"
-    else
-        # Add to existing SessionStart array, or create it
-        if jq -e '.hooks.SessionStart' "$SETTINGS" > /dev/null 2>&1; then
-            # SessionStart exists - append our hook
-            jq --argjson entry "$HOOK_ENTRY" '.hooks.SessionStart += [$entry]' "$SETTINGS" > "$SETTINGS.tmp"
-        elif jq -e '.hooks' "$SETTINGS" > /dev/null 2>&1; then
-            # hooks exists but no SessionStart - add it
-            jq --argjson entry "$HOOK_ENTRY" '.hooks.SessionStart = [$entry]' "$SETTINGS" > "$SETTINGS.tmp"
-        else
-            # no hooks at all - create the structure
-            jq --argjson entry "$HOOK_ENTRY" '.hooks = {"SessionStart": [$entry]}' "$SETTINGS" > "$SETTINGS.tmp"
-        fi
+        jq '
+          (.hooks.SessionStart // []) |= [
+            .[] |
+            .hooks = [.hooks[] | select(.command | test("whichmodel") | not)] |
+            select(.hooks | length > 0)
+          ]
+        ' "$SETTINGS" > "$SETTINGS.tmp"
         mv "$SETTINGS.tmp" "$SETTINGS"
-        echo "✓ Hook wired into settings.json"
     fi
+
+    # Add whichmodel as its own hook group
+    if jq -e '.hooks.SessionStart' "$SETTINGS" > /dev/null 2>&1; then
+        jq --argjson entry "$HOOK_ENTRY" '.hooks.SessionStart += [$entry]' "$SETTINGS" > "$SETTINGS.tmp"
+    elif jq -e '.hooks' "$SETTINGS" > /dev/null 2>&1; then
+        jq --argjson entry "$HOOK_ENTRY" '.hooks.SessionStart = [$entry]' "$SETTINGS" > "$SETTINGS.tmp"
+    else
+        jq --argjson entry "$HOOK_ENTRY" '.hooks = {"SessionStart": [$entry]}' "$SETTINGS" > "$SETTINGS.tmp"
+    fi
+    mv "$SETTINGS.tmp" "$SETTINGS"
+    echo "✓ Hook wired into settings.json"
 else
     # Create settings.json from scratch
     cat > "$SETTINGS" << SETTINGSEOF
