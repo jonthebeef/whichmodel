@@ -4,6 +4,8 @@
 
 Stop burning Opus tokens on simple tasks. `whichmodel` installs a [Claude Code](https://docs.anthropic.com/en/docs/claude-code) hook that recommends the cheapest sufficient model (Haiku, Sonnet, or Opus) before every task — and pauses to let you switch.
 
+![whichmodel in action](whichmodel.gif)
+
 ## The Problem
 
 Claude Code remembers your last model. If you were using Opus for a complex task yesterday, you're still on Opus today—even if today's task is "fix a typo in the README."
