@@ -8,19 +8,33 @@ set -e
 
 CLAUDE_MD="$HOME/.claude/CLAUDE.md"
 HOOKS_DIR="$HOME/.claude/hooks"
+SETTINGS="$HOME/.claude/settings.json"
 MARKER="<!-- whichmodel -->"
 
 echo "🔧 Installing whichmodel..."
+
+# Check for jq (needed for settings.json manipulation)
+if ! command -v jq &> /dev/null; then
+    echo "❌ jq is required but not installed."
+    echo "   Install with: brew install jq (macOS) or apt install jq (Linux)"
+    exit 1
+fi
 
 # Create directories if needed
 mkdir -p "$HOME/.claude"
 mkdir -p "$HOOKS_DIR"
 
-# Check if already installed
+# Check if already installed — upgrade in-place if so
+UPGRADING=false
 if [ -f "$CLAUDE_MD" ] && grep -q "$MARKER" "$CLAUDE_MD"; then
-    echo "⚠️  whichmodel is already installed in ~/.claude/CLAUDE.md"
-    echo "   Run ./uninstall.sh first if you want to reinstall."
-    exit 0
+    UPGRADING=true
+    echo "📦 Existing installation detected — upgrading..."
+    # Remove old CLAUDE.md section (cross-platform sed)
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        sed -i '' '/<!-- whichmodel -->/,/<!-- \/whichmodel -->/d' "$CLAUDE_MD"
+    else
+        sed -i '/<!-- whichmodel -->/,/<!-- \/whichmodel -->/d' "$CLAUDE_MD"
+    fi
 fi
 
 # Backup existing CLAUDE.md if it exists
@@ -46,6 +60,7 @@ cat <<'EOF'
 EOF
 HOOKEOF
 chmod +x "$HOOKS_DIR/whichmodel.sh"
+echo "✓ Hook script installed"
 
 # Append slim reference guide to CLAUDE.md
 cat >> "$CLAUDE_MD" << 'EOF'
@@ -59,31 +74,62 @@ Model selection guide (used by whichmodel hook):
 - **Opus**: Architecture decisions, ambiguous requirements, complex debugging, security-sensitive work, novel problems
 <!-- /whichmodel -->
 EOF
+echo "✓ Model guide added to CLAUDE.md"
 
-# Add hook to settings.json if not already present
-SETTINGS="$HOME/.claude/settings.json"
+# Wire hook into settings.json
+HOOK_ENTRY='{"hooks": [{"type": "command", "command": "~/.claude/hooks/whichmodel.sh"}]}'
+
 if [ -f "$SETTINGS" ]; then
-    if ! grep -q "whichmodel.sh" "$SETTINGS"; then
-        echo ""
-        echo "⚠️  Add the following hook to your ~/.claude/settings.json under hooks.SessionStart:"
-        echo '    {"hooks": [{"type": "command", "command": "~/.claude/hooks/whichmodel.sh"}]}'
+    # Backup settings
+    cp "$SETTINGS" "$SETTINGS.backup"
+
+    if grep -q "whichmodel.sh" "$SETTINGS"; then
+        echo "✓ Hook already wired in settings.json"
+    else
+        # Add to existing SessionStart array, or create it
+        if jq -e '.hooks.SessionStart' "$SETTINGS" > /dev/null 2>&1; then
+            # SessionStart exists - append our hook
+            jq --argjson entry "$HOOK_ENTRY" '.hooks.SessionStart += [$entry]' "$SETTINGS" > "$SETTINGS.tmp"
+        elif jq -e '.hooks' "$SETTINGS" > /dev/null 2>&1; then
+            # hooks exists but no SessionStart - add it
+            jq --argjson entry "$HOOK_ENTRY" '.hooks.SessionStart = [$entry]' "$SETTINGS" > "$SETTINGS.tmp"
+        else
+            # no hooks at all - create the structure
+            jq --argjson entry "$HOOK_ENTRY" '.hooks = {"SessionStart": [$entry]}' "$SETTINGS" > "$SETTINGS.tmp"
+        fi
+        mv "$SETTINGS.tmp" "$SETTINGS"
+        echo "✓ Hook wired into settings.json"
     fi
 else
-    echo ""
-    echo "⚠️  No settings.json found. Create ~/.claude/settings.json with:"
-    echo '  {"hooks": {"SessionStart": [{"hooks": [{"type": "command", "command": "~/.claude/hooks/whichmodel.sh"}]}]}}'
+    # Create settings.json from scratch
+    cat > "$SETTINGS" << SETTINGSEOF
+{
+  "hooks": {
+    "SessionStart": [
+      $HOOK_ENTRY
+    ]
+  }
+}
+SETTINGSEOF
+    echo "✓ Created settings.json with hook"
 fi
 
 echo ""
-echo "✅ whichmodel installed successfully!"
+if [ "$UPGRADING" = true ]; then
+    echo "✅ whichmodel upgraded successfully!"
+else
+    echo "✅ whichmodel installed successfully!"
+fi
 echo ""
 echo "What's included:"
 echo "  - Hook: ~/.claude/hooks/whichmodel.sh (behavioral logic)"
 echo "  - Guide: ~/.claude/CLAUDE.md (model selection reference)"
+echo "  - Config: ~/.claude/settings.json (hook wiring)"
 echo ""
 echo "How it works:"
 echo "  - Before significant tasks, Claude recommends the right model"
 echo "  - If a switch is recommended, Claude pauses and asks you"
 echo "  - Select 'Continue' to proceed, or 'Switch' to change model first"
 echo ""
+echo "To upgrade: git pull && ./install.sh"
 echo "To uninstall: ./uninstall.sh"
